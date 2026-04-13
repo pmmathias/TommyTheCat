@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tommy the Cat — Bass Practice Loop</title>
+<style>
+  :root {
+    --bg: #121316; --card: #1e2026; --accent: #ffcc33; --text: #eaeaea;
+    --muted: #888; --green: #4cb050; --red: #c0473b;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, system-ui, sans-serif;
+         background: var(--bg); color: var(--text); min-height: 100vh;
+         display: flex; justify-content: center; padding: 20px; }
+  main { max-width: 520px; width: 100%; }
+  h1 { color: var(--accent); margin-bottom: 4px; font-size: 22px; }
+  .sub { color: var(--muted); margin-bottom: 28px; font-size: 14px; }
+  .card { background: var(--card); border-radius: 12px; padding: 18px 20px; margin-bottom: 16px; }
+  button { border: 0; border-radius: 8px; padding: 12px 20px; font-size: 15px;
+           cursor: pointer; background: #333; color: var(--text);
+           transition: all 0.15s; }
+  button:hover { filter: brightness(1.2); }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  button.play { width: 100%; background: var(--green); color: white;
+                font-size: 18px; font-weight: 600; padding: 18px; }
+  button.play.on { background: var(--red); }
+  button.mute { min-width: 140px; text-align: left; }
+  button.mute.muted { background: var(--red); opacity: 0.85; }
+  .row { display: flex; align-items: center; gap: 12px; margin: 10px 0; }
+  .row > label { min-width: 80px; color: var(--muted); font-size: 14px; }
+  input[type=range] { flex: 1; accent-color: var(--accent); }
+  .value { min-width: 70px; text-align: right; color: var(--accent);
+           font-variant-numeric: tabular-nums; font-size: 14px; }
+  .bpm { font-size: 32px; font-weight: 700; color: var(--accent);
+         text-align: center; margin: 6px 0 2px; }
+  .bpm-sub { color: var(--muted); font-size: 13px; text-align: center; }
+  .hint { color: var(--muted); font-size: 13px; margin-top: 16px; line-height: 1.5; }
+  .quick { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+  .quick button { padding: 6px 10px; font-size: 13px; background: #2a2d33; }
+  .status { color: var(--muted); font-size: 13px; text-align: center; padding: 10px; }
+  .engine-info { font-size: 11px; color: var(--muted); text-align: center; margin-top: 8px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>🎸 Tommy the Cat — Practice Loop</h1>
+  <div class="sub">Keep drums playing, mute bass, slow down for practice.</div>
+
+  <div id="status" class="status">Loading audio …</div>
+
+  <div class="card">
+    <button id="play" class="play" disabled>▶ Play</button>
+  </div>
+
+  <div class="card">
+    <div class="bpm"><span id="bpm">210</span> BPM</div>
+    <div class="bpm-sub"><span id="pct">100</span>% of original tempo</div>
+    <div class="row" style="margin-top:14px">
+      <label>Tempo</label>
+      <input type="range" id="tempo" min="70" max="130" value="100">
+    </div>
+    <div class="quick">
+      <button data-t="70">70 %</button>
+      <button data-t="80">80 %</button>
+      <button data-t="90">90 %</button>
+      <button data-t="100">100 %</button>
+      <button data-t="110">110 %</button>
+      <button data-t="120">120 %</button>
+      <button data-t="130">130 %</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <button id="muteDrums" class="mute">🥁 Drums</button>
+      <input type="range" id="volDrums" min="0" max="150" value="80">
+      <span class="value" id="vdDisp">80 %</span>
+    </div>
+    <div class="row">
+      <button id="muteBass" class="mute">🎸 Bass</button>
+      <input type="range" id="volBass" min="0" max="150" value="80">
+      <span class="value" id="vbDisp">80 %</span>
+    </div>
+  </div>
+
+  <div class="hint">
+    💡 <b>Tip:</b> Mute the bass and play along to the drums. Pitch is preserved
+    when changing tempo (WSOLA algorithm via SoundTouch).
+  </div>
+  <div class="engine-info">Engine: SoundTouch AudioWorklet (WSOLA time-stretch, pitch-preserving)</div>
+</main>
+
+<script>
+const BASE_BPM = 210;
+// soundtouch-worklet.js is patched to do in-place wrap-around looping.
+// The buffer source's extract() wraps with modulo so SoundTouch sees
+// an infinite stream and never hits an end-of-stream boundary.
+
+class SoundTouchTrack {
+  constructor(ctx, buffer) {
+    this.ctx = ctx;
+    this.buffer = buffer;
+    this.gain = ctx.createGain();
+    this.gain.connect(ctx.destination);
+    this.node = null;
+    this.silentInput = null;
+    this.volume = 0.8;
+    this.muted = false;
+    this.tempo = 1.0;
+  }
+
+  _createNode() {
+    const left = this.buffer.getChannelData(0);
+    const right = this.buffer.numberOfChannels > 1
+      ? this.buffer.getChannelData(1) : left;
+    const props = {
+      sampleRate: this.buffer.sampleRate,
+      duration: this.buffer.duration,
+      length: this.buffer.length,
+      numberOfChannels: 2,
+    };
+    const node = new AudioWorkletNode(this.ctx, 'soundtouch-worklet',
+      { numberOfInputs: 1, outputChannelCount: [2] });
+
+    const silent = this.ctx.createConstantSource();
+    silent.offset.value = 0;
+    silent.connect(node);
+    silent.start();
+    node.connect(this.gain);
+
+    node.port.onmessage = (e) => {
+      const { message } = e.data;
+      if (message === 'PROCESSOR_CONSTRUCTOR') {
+        node.port.postMessage({
+          message: 'INITIALIZE_PROCESSOR',
+          detail: [props, left, right],
+        });
+      } else if (message === 'PROCESSOR_READY') {
+        node.port.postMessage({
+          message: 'SET_PIPE_PROP',
+          detail: { name: 'tempo', value: this.tempo },
+        });
+      }
+    };
+
+    return { node, silent };
+  }
+
+  start() {
+    if (this.node) return;
+    const { node, silent } = this._createNode();
+    this.node = node;
+    this.silentInput = silent;
+  }
+
+  stop() {
+    if (this.node) {
+      try { this.node.disconnect(); } catch {}
+      try { this.silentInput.stop(); this.silentInput.disconnect(); } catch {}
+      this.node = null;
+      this.silentInput = null;
+    }
+  }
+
+  setTempo(tempo) {
+    this.tempo = tempo;
+    if (this.node) {
+      this.node.port.postMessage({
+        message: 'SET_PIPE_PROP',
+        detail: { name: 'tempo', value: tempo },
+      });
+    }
+  }
+
+  setVolume(v) {
+    this.volume = v;
+    if (!this.muted) this.gain.gain.value = v;
+  }
+
+  setMute(m) {
+    this.muted = m;
+    this.gain.gain.value = m ? 0 : this.volume;
+  }
+}
+
+// ----- main --------------------------------------------------------
+const ctx = new AudioContext();
+let drum, bass;
+
+async function loadBuffer(url) {
+  const r = await fetch(url);
+  const ab = await r.arrayBuffer();
+  return await ctx.decodeAudioData(ab);
+}
+
+async function setup() {
+  try {
+    await ctx.audioWorklet.addModule('soundtouch-worklet.js');
+  } catch (err) {
+    document.getElementById('status').textContent =
+      'Error: soundtouch-worklet.js failed to load. ' + err.message;
+    return;
+  }
+  const [drumBuf, bassBuf] = await Promise.all([
+    loadBuffer('drums.wav'),
+    loadBuffer('bass.wav'),
+  ]);
+  drum = new SoundTouchTrack(ctx, drumBuf);
+  bass = new SoundTouchTrack(ctx, bassBuf);
+  drum.setVolume(0.8);
+  bass.setVolume(0.8);
+  document.getElementById('status').textContent =
+    `Ready · ${Math.round(drumBuf.duration)} s loop @ ${BASE_BPM} BPM`;
+  document.getElementById('play').disabled = false;
+}
+setup();
+
+let playing = false;
+document.getElementById('play').onclick = async () => {
+  if (ctx.state === 'suspended') await ctx.resume();
+  const play = document.getElementById('play');
+  if (playing) {
+    drum.stop(); bass.stop();
+    play.textContent = '▶ Play';
+    play.classList.remove('on');
+  } else {
+    drum.start();
+    bass.start();
+    play.textContent = '⏸ Stop';
+    play.classList.add('on');
+  }
+  playing = !playing;
+};
+
+function setTempoUI(pct) {
+  const rate = pct / 100;
+  if (drum) drum.setTempo(rate);
+  if (bass) bass.setTempo(rate);
+  document.getElementById('bpm').textContent = Math.round(BASE_BPM * rate);
+  document.getElementById('pct').textContent = pct;
+}
+document.getElementById('tempo').oninput = e => setTempoUI(+e.target.value);
+document.querySelectorAll('.quick button').forEach(b => {
+  b.onclick = () => {
+    document.getElementById('tempo').value = b.dataset.t;
+    setTempoUI(+b.dataset.t);
+  };
+});
+
+function setupMute(btnId, trackGetter, label) {
+  const btn = document.getElementById(btnId);
+  let muted = false;
+  btn.onclick = () => {
+    muted = !muted;
+    const t = trackGetter();
+    if (t) t.setMute(muted);
+    btn.classList.toggle('muted', muted);
+    btn.textContent = (muted ? '🔇 ' : (label.startsWith('🥁') ? '🥁 ' : '🎸 ')) +
+                      (muted ? label.slice(2) + ' (off)' : label.slice(2));
+  };
+}
+setupMute('muteDrums', () => drum, '🥁 Drums');
+setupMute('muteBass',  () => bass, '🎸 Bass');
+
+document.getElementById('volDrums').oninput = e => {
+  if (drum) drum.setVolume(+e.target.value / 100);
+  document.getElementById('vdDisp').textContent = e.target.value + ' %';
+};
+document.getElementById('volBass').oninput = e => {
+  if (bass) bass.setVolume(+e.target.value / 100);
+  document.getElementById('vbDisp').textContent = e.target.value + ' %';
+};
+</script>
+</body>
+</html>
