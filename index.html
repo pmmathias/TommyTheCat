@@ -58,16 +58,15 @@
     <div class="bpm-sub"><span id="pct">100</span>% of original tempo</div>
     <div class="row" style="margin-top:14px">
       <label>Tempo</label>
-      <input type="range" id="tempo" min="70" max="130" value="100">
+      <input type="range" id="tempo" min="180" max="230" value="210">
     </div>
     <div class="quick">
-      <button data-t="70">70 %</button>
-      <button data-t="80">80 %</button>
-      <button data-t="90">90 %</button>
-      <button data-t="100">100 %</button>
-      <button data-t="110">110 %</button>
-      <button data-t="120">120 %</button>
-      <button data-t="130">130 %</button>
+      <button data-bpm="180">180</button>
+      <button data-bpm="190">190</button>
+      <button data-bpm="200">200</button>
+      <button data-bpm="210">210</button>
+      <button data-bpm="220">220</button>
+      <button data-bpm="230">230</button>
     </div>
   </div>
 
@@ -233,18 +232,18 @@ document.getElementById('play').onclick = async () => {
   playing = !playing;
 };
 
-function setTempoUI(pct) {
-  const rate = pct / 100;
+function setTempoUI(bpm) {
+  const rate = bpm / BASE_BPM;
   if (drum) drum.setTempo(rate);
   if (bass) bass.setTempo(rate);
-  document.getElementById('bpm').textContent = Math.round(BASE_BPM * rate);
-  document.getElementById('pct').textContent = pct;
+  document.getElementById('bpm').textContent = bpm;
+  document.getElementById('pct').textContent = Math.round(rate * 100);
 }
 document.getElementById('tempo').oninput = e => setTempoUI(+e.target.value);
 document.querySelectorAll('.quick button').forEach(b => {
   b.onclick = () => {
-    document.getElementById('tempo').value = b.dataset.t;
-    setTempoUI(+b.dataset.t);
+    document.getElementById('tempo').value = b.dataset.bpm;
+    setTempoUI(+b.dataset.bpm);
   };
 });
 

@@ -1,7 +1,8 @@
 # Tommy the Cat — Practice Loop
 
 A static web app that lets you loop a drum + bass stem, mute either track
-independently, and change tempo (70–130 %) while keeping the pitch unchanged.
+independently, and change tempo (180–230 BPM, i.e. ~86–110 % of the 210 BPM
+original) while keeping the pitch unchanged.
 Built to help you learn Primus' "Tommy the Cat" bass line by playing along
 to the drums.
 
