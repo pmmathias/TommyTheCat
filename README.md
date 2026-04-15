@@ -5,8 +5,9 @@ independently, and change tempo (70–130 %) while keeping the pitch unchanged.
 Built to help you learn Primus' "Tommy the Cat" bass line by playing along
 to the drums.
 
-**Live demo:** ⟨add your hosted URL here⟩
-**Related blog post:** ⟨add your blog URL here⟩
+**Live demo:** [pmmathias.github.io/TommyTheCat](https://pmmathias.github.io/TommyTheCat/)
+**Blog post explaining how it was built:** [ki-mathias.de → Tommy Practice](https://ki-mathias.de/en/tommy-practice.html)
+**More posts on AI-assisted audio & code:** [ki-mathias.de](https://ki-mathias.de/en/)
 
 ---
 
@@ -352,7 +353,15 @@ drums.wav, bass.wav
 
 ---
 
-## 5 · Credits & licence
+## 5 · Read more
+
+- 📝 **[Full write-up on the blog](https://ki-mathias.de/en/tommy-practice.html)** —
+  the story behind this repo, with diagrams of the FFT cross-correlation
+  and the sliding-window verification method.
+- 🏠 **[ki-mathias.de](https://ki-mathias.de/en/)** — more posts on
+  building things with Claude Code, audio DSP, and home recording.
+
+## 6 · Credits & licence
 
 - **[SoundTouch](https://www.surina.net/soundtouch/)** by Olli Parviainen —
   WSOLA time-stretching, LGPL 2.1
